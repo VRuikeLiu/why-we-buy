@@ -1,22 +1,24 @@
 # Why We Buy
 
-An interactive, Art Deco scrollytelling website built from the thesis
+An interactive scrollytelling website built from the thesis
 **"Why We Buy Products: Advertisement and Consumerism During the Roaring Twenties"**
 by Ruike (Vincent) Liu (AP United States History, April 2026).
 
-It traces how 1920s advertisers abandoned the language of utility for the
-psychology of identity — selling who you might *become* instead of what a
-product *does* — and, in doing so, helped invent modern consumerism.
+It traces how 1920s advertisers moved from selling what a product *does* to
+selling who the buyer might *become*.
 
 ## Built with
 
-- Hand-written HTML / CSS (no framework)
-- [GSAP](https://gsap.com/) + ScrollTrigger for motion (scrubbed text reveals,
-  a pinned "thrift → desire" palette flip, a horizontal gallery, animated
-  counters and data bars)
-- Typography: Playfair Display, Poiret One, EB Garamond (Google Fonts)
-- Fully responsive; respects `prefers-reduced-motion`; degrades gracefully
-  without JavaScript.
+- Hand-written HTML and CSS, no framework
+- A small dependency-free script (`assets/main.js`) for the pinned
+  "thrift → desire" flip, number count-ups, the ledger bars and the reading
+  progress line
+- Typography: EB Garamond for text, Playfair Display for headlines (Google Fonts)
+- Responsive, respects `prefers-reduced-motion`, and reads fully without
+  JavaScript
+
+The design was cleaned up with the
+[unslop](https://github.com/heydamir/unslop) skill by Damir Sokolovsky.
 
 ## Run locally
 
@@ -26,5 +28,5 @@ python3 -m http.server 8000
 # then open http://localhost:8000
 ```
 
-All advertisements are recreated typographically; every quotation is drawn
-from the sources in the on-page bibliography.
+The period advertisements are reset in type rather than reproduced, and every
+quotation comes from the sources in the on-page bibliography.

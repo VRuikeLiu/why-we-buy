@@ -1,13 +1,23 @@
 /* =================================================================
-   WHY WE BUY — motion engine (GSAP + ScrollTrigger)
-   Graceful: if GSAP fails to load, or reduced-motion is set,
-   all content remains fully visible and counters show finals.
+   WHY WE BUY: motion layer, no dependencies
+   Content is fully visible without it. With reduced motion the head
+   script never adds .js, so nothing here hides or tweens anything.
    ================================================================= */
 (function () {
   "use strict";
 
   var root = document.documentElement;
-  var prefersReduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var motion = root.classList.contains("js");
+
+  if (motion && !("IntersectionObserver" in window)) {
+    root.classList.remove("js");
+    motion = false;
+  }
+
+  function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+  function range(p, a, b) { return clamp01((p - a) / (b - a)); }
+  // close to the CSS curve cubic-bezier(0.22, 1, 0.36, 1)
+  function easeOut(t) { return 1 - Math.pow(1 - t, 4); }
 
   /* ---------- number formatting ---------- */
   function formatNum(value, el) {
@@ -20,198 +30,99 @@
     }
     return (el.dataset.prefix || "") + s + (el.dataset.suffix || "");
   }
-  function setFinal(el) {
-    el.textContent = formatNum(parseFloat(el.dataset.countTo), el);
-  }
 
-  var counters = Array.prototype.slice.call(document.querySelectorAll("[data-count-to]"));
-  var promiseSection = document.querySelector(".promise");
-
-  /* ---------- FALLBACK PATH: no GSAP, or reduced motion ---------- */
-  if (!window.gsap || prefersReduce) {
-    if (!window.gsap) root.classList.remove("js"); // CSS then shows reveal elements
-    counters.forEach(setFinal);
-    if (promiseSection) promiseSection.classList.add("no-pin");
-    return;
-  }
-
-  /* ---------- FULL MOTION PATH ---------- */
-  var gsap = window.gsap;
-  gsap.registerPlugin(window.ScrollTrigger);
-  var ScrollTrigger = window.ScrollTrigger;
-
-  /* count-up on scroll-in */
-  function animateCount(el) {
+  function countUp(el) {
     var from = parseFloat(el.dataset.countFrom || "0");
     var to = parseFloat(el.dataset.countTo);
-    if (from === to) { el.textContent = formatNum(to, el); return; }
-    var obj = { v: from };
-    gsap.to(obj, {
-      v: to, duration: 1.8, ease: "power2.out",
-      onUpdate: function () { el.textContent = formatNum(obj.v, el); }
-    });
-  }
-  counters.forEach(function (el) {
-    el.textContent = formatNum(parseFloat(el.dataset.countFrom || "0"), el);
-    ScrollTrigger.create({
-      trigger: el, start: "top 90%", once: true,
-      onEnter: function () { animateCount(el); }
-    });
-  });
-
-  /* ---------- HERO intro ---------- */
-  gsap.set(".hero__title .line > span", { yPercent: 118, opacity: 0 });
-  var heroTl = gsap.timeline({ defaults: { ease: "expo.out" } });
-  heroTl
-    .to(".hero__kicker", { opacity: 1, duration: 1.1 }, 0.15)
-    .to(".hero__title .line > span", { yPercent: 0, opacity: 1, duration: 1.4, stagger: 0.16 }, 0.35)
-    .to(".hero__subtitle", { opacity: 1, duration: 1.1 }, "-=0.85")
-    .to(".hero__meta", { opacity: 1, duration: 1.1 }, "-=0.8")
-    .to(".hero__scroll", { opacity: 1, duration: 1.0 }, "-=0.7");
-
-  gsap.from(".hero__ring", { scale: 0.55, opacity: 0, duration: 2.2, ease: "expo.out" });
-
-  /* slow rotating sunbursts */
-  gsap.to(".hero__rays", { rotation: 360, duration: 140, repeat: -1, ease: "none", transformOrigin: "50% 50%" });
-  gsap.to(".legacy__rays", { rotation: -360, duration: 180, repeat: -1, ease: "none", transformOrigin: "50% 50%" });
-
-  /* hero parallax fade as you leave */
-  gsap.to(".hero__inner", {
-    yPercent: -14, opacity: 0.25, ease: "none",
-    scrollTrigger: { trigger: ".hero", start: "top top", end: "bottom top", scrub: true }
-  });
-  gsap.to(".hero__ring", {
-    scale: 1.25, ease: "none",
-    scrollTrigger: { trigger: ".hero", start: "top top", end: "bottom top", scrub: true }
-  });
-
-  /* ---------- generic reveals (exclude horizontal-track items) ---------- */
-  var reveals = gsap.utils.toArray(".reveal").filter(function (el) {
-    return !el.closest(".promise__track");
-  });
-  ScrollTrigger.batch(reveals, {
-    start: "top 86%",
-    onEnter: function (batch) {
-      gsap.to(batch, { opacity: 1, y: 0, duration: 1.0, stagger: 0.12, ease: "power3.out", overwrite: true });
-    },
-    once: true
-  });
-  // items inside the horizontal gallery: just make them visible (they travel sideways)
-  gsap.set(gsap.utils.toArray(".promise__track .reveal"), { opacity: 1, y: 0 });
-
-  /* ---------- scrub word reveals ---------- */
-  function splitWords(node) {
-    Array.prototype.slice.call(node.childNodes).forEach(function (child) {
-      if (child.nodeType === 3) {
-        var text = child.textContent;
-        if (!text) return;
-        var frag = document.createDocumentFragment();
-        text.split(/(\s+)/).forEach(function (part) {
-          if (part.length === 0) return;
-          if (/\S/.test(part)) {
-            var span = document.createElement("span");
-            span.className = "word";
-            span.textContent = part;
-            frag.appendChild(span);
-          } else {
-            frag.appendChild(document.createTextNode(part));
-          }
-        });
-        node.replaceChild(frag, child);
-      } else if (child.nodeType === 1 && child.tagName !== "BR") {
-        splitWords(child);
-      }
-    });
-  }
-  gsap.utils.toArray("[data-scrub]").forEach(function (el) {
-    splitWords(el);
-    var words = el.querySelectorAll(".word");
-    if (!words.length) return;
-    gsap.to(words, {
-      opacity: 1, ease: "none", stagger: 0.4,
-      scrollTrigger: { trigger: el, start: "top 82%", end: "bottom 58%", scrub: true }
-    });
-  });
-
-  /* ---------- THE TURN — palette flip (CSS sticky + scrubbed timeline) ---------- */
-  var turn = document.querySelector(".turn");
-  if (turn) {
-    gsap.set(".turn__center", { opacity: 0, y: 36 });
-    gsap.set(".turn__word--gold", { opacity: 0, scale: 1.12 });
-    var turnTl = gsap.timeline({
-      scrollTrigger: { trigger: turn, start: "top top", end: "bottom bottom", scrub: 1 }
-    });
-    turnTl
-      .to(".turn__layer--noir", { clipPath: "inset(0 0 0% 0)", ease: "none", duration: 1.0 })
-      .to(".turn__layer--paper .turn__word", { opacity: 0, duration: 0.4 }, 0.1)
-      .to(".turn__word--gold", { opacity: 0.18, scale: 1, duration: 0.6 }, 0.25)
-      .to(".turn__center", { opacity: 1, y: 0, duration: 0.7 }, 0.45);
+    var start = null;
+    function step(now) {
+      if (start === null) start = now;
+      var t = clamp01((now - start) / 1200);
+      el.textContent = formatNum(from + (to - from) * easeOut(t), el);
+      if (t < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
   }
 
-  /* ---------- THE PROMISE — horizontal pinned scroll ---------- */
-  var track = document.querySelector(".promise__track");
-  var trackWrap = document.querySelector(".promise__track-wrap");
-  if (track && trackWrap) {
-    var distance = function () {
-      return Math.max(0, track.scrollWidth - window.innerWidth + 24);
-    };
-    gsap.to(track, {
-      x: function () { return -distance(); },
-      ease: "none",
-      scrollTrigger: {
-        trigger: trackWrap,
-        start: "top top",
-        end: function () { return "+=" + distance(); },
-        scrub: 1,
-        pin: true,
-        anticipatePin: 1,
-        invalidateOnRefresh: true
-      }
+  /* ---------- reveals, counters and bars on scroll-in ---------- */
+  if (motion) {
+    var counters = Array.prototype.slice.call(document.querySelectorAll("[data-count-to]"));
+    counters.forEach(function (el) {
+      el.textContent = formatNum(parseFloat(el.dataset.countFrom || "0"), el);
     });
+
+    var io = new IntersectionObserver(function (entries) {
+      var batch = 0;
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        var el = entry.target;
+        io.unobserve(el);
+        if (el.classList.contains("reveal")) {
+          el.style.transitionDelay = Math.min(batch++, 5) * 50 + "ms";
+          el.classList.add("is-in");
+        }
+        if (el.hasAttribute("data-count-to")) countUp(el);
+      });
+    }, { rootMargin: "0px 0px -12% 0px" });
+
+    document.querySelectorAll(".reveal").forEach(function (el) { io.observe(el); });
+    counters.forEach(function (el) { io.observe(el); });
   }
 
-  /* ---------- LEDGER bars ---------- */
-  gsap.utils.toArray(".bar").forEach(function (bar) {
-    var grow = parseFloat(bar.dataset.grow || "0");
-    var fill = bar.querySelector(".bar__fill");
-    if (!fill) return;
-    ScrollTrigger.create({
-      trigger: bar, start: "top 84%", once: true,
-      onEnter: function () {
-        gsap.to(fill, { right: (100 - Math.min(grow, 100)) + "%", duration: 1.6, ease: "power3.out" });
-      }
-    });
-  });
+  /* ---------- THE TURN: palette flip scrubbed by scroll ---------- */
+  var turn = motion ? document.querySelector(".turn") : null;
+  var turnParts = turn && {
+    noir: turn.querySelector(".turn__layer--noir"),
+    paperWord: turn.querySelector(".turn__layer--paper .turn__word"),
+    goldWord: turn.querySelector(".turn__word--gold"),
+    center: turn.querySelector(".turn__center")
+  };
+  function renderTurn() {
+    var total = turn.offsetHeight - window.innerHeight;
+    var p = total > 0 ? clamp01(-turn.getBoundingClientRect().top / total) : 1;
+    var wipe = range(p, 0, 0.55);
+    var gold = range(p, 0.2, 0.65);
+    var center = range(p, 0.4, 0.8);
+    turnParts.noir.style.clipPath = "inset(0 0 " + ((1 - wipe) * 100).toFixed(2) + "% 0)";
+    turnParts.paperWord.style.opacity = (1 - range(p, 0.08, 0.4)).toFixed(3);
+    turnParts.goldWord.style.opacity = (0.18 * gold).toFixed(3);
+    turnParts.goldWord.style.transform = "scale(" + (1.06 - 0.06 * gold).toFixed(4) + ")";
+    turnParts.center.style.opacity = center.toFixed(3);
+    turnParts.center.style.transform = "translateY(" + (12 * (1 - center)).toFixed(2) + "px)";
+  }
 
-  /* ---------- brand marquee ---------- */
-  var mq = document.querySelector(".marquee__track");
-  if (mq) gsap.to(mq, { xPercent: -50, duration: 32, ease: "none", repeat: -1 });
-
-  /* ---------- nav stuck + reading spine ---------- */
+  /* ---------- nav menu (small screens) ---------- */
   var nav = document.querySelector(".nav");
+  var toggle = document.querySelector(".nav__toggle");
+  function setMenu(open) {
+    nav.classList.toggle("is-open", open);
+    toggle.setAttribute("aria-expanded", String(open));
+  }
+  if (nav && toggle) {
+    toggle.addEventListener("click", function () { setMenu(!nav.classList.contains("is-open")); });
+    nav.querySelectorAll(".nav__links a").forEach(function (a) {
+      a.addEventListener("click", function () { setMenu(false); });
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && nav.classList.contains("is-open")) { setMenu(false); toggle.focus(); }
+    });
+  }
+
+  /* ---------- nav state, reading progress, the turn ---------- */
   var fill = document.querySelector(".spine__fill");
   var ticking = false;
   function onScroll() {
     var max = root.scrollHeight - root.clientHeight;
     var y = window.scrollY || root.scrollTop;
-    var p = max > 0 ? y / max : 0;
-    if (fill) fill.style.height = (p * 100).toFixed(2) + "%";
+    if (fill) fill.style.transform = "scaleY(" + (max > 0 ? y / max : 0).toFixed(4) + ")";
     if (nav) nav.classList.toggle("is-stuck", y > 80);
+    if (turn) renderTurn();
     ticking = false;
   }
-  window.addEventListener("scroll", function () {
+  function requestTick() {
     if (!ticking) { ticking = true; requestAnimationFrame(onScroll); }
-  }, { passive: true });
-  onScroll();
-
-  /* ---------- recompute after fonts/load ---------- */
-  if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(function () { ScrollTrigger.refresh(); });
   }
-  // Settle passes: the horizontal pin inserts a tall spacer that shifts every
-  // later trigger; force clean recomputes once layout + fonts are final.
-  window.addEventListener("load", function () {
-    ScrollTrigger.refresh();
-    setTimeout(function () { ScrollTrigger.refresh(); }, 450);
-  });
+  window.addEventListener("scroll", requestTick, { passive: true });
+  window.addEventListener("resize", requestTick);
+  onScroll();
 })();
